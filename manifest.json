@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "Hate Speech Blur",
+  "version": "1.0",
+  "description": "Detect and blur hate speech on any website.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"]
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["backend/*"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}
