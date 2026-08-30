@@ -1,0 +1,8 @@
+services:
+  toxicity-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5050:5050"
+    restart: unless-stopped

@@ -4,9 +4,11 @@
   "version": "1.0",
   "description": "Detect and blur hate speech on any website.",
   "permissions": [
-    "activeTab",
-    "scripting",
-    "storage"
+    "activeTab"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1:5050/*",
+    "http://localhost:5050/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -17,7 +19,8 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content.js"]
+      "js": ["content.js"],
+      "run_at": "document_idle"
     }
   ],
   "web_accessible_resources": [
