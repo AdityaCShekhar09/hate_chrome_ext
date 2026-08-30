@@ -1,0 +1,67 @@
+openapi: 3.0.3
+info:
+  title: Toxicity Detection API
+  version: 1.0.0
+  description: Local API for classifying toxic text.
+servers:
+  - url: http://127.0.0.1:5050
+paths:
+  /health:
+    get:
+      summary: Check API availability
+      responses:
+        '200':
+          description: API is running
+  /test:
+    get:
+      summary: Run model inference with query text
+      parameters:
+        - in: query
+          name: text
+          schema: {type: string}
+      responses:
+        '200': {description: Model result}
+    post:
+      summary: Run model inference with JSON text
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/TextRequest'}
+      responses:
+        '200': {description: Model result}
+  /detect:
+    post:
+      summary: Classify one text
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/TextRequest'}
+      responses:
+        '200': {description: Classification result}
+  /detect-batch:
+    post:
+      summary: Classify multiple texts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/BatchRequest'}
+      responses:
+        '200': {description: Classification results}
+components:
+  schemas:
+    TextRequest:
+      type: object
+      required: [text]
+      properties:
+        text: {type: string, minLength: 1}
+    BatchRequest:
+      type: object
+      required: [texts]
+      properties:
+        texts:
+          type: array
+          maxItems: 100
+          items: {type: string, minLength: 1}

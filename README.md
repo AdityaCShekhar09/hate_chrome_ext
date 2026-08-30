@@ -30,9 +30,7 @@ When the extension content script loads, it recursively walks the page body, bat
 | `popup.html` / `popup.js` | Extension popup and manual page-scan trigger |
 | `background.js` | Extension service worker; currently logs installation |
 | `backend/app.py` | Flask API, preprocessing, vectorization, and inference |
-| `backend/comments.csv` | Training corpus used only to rebuild the vocabulary or retrain the model |
 | `backend/vocabulary.json` | Persisted `TextVectorization` vocabulary used during inference |
-| `backend/build_vocabulary.py` | One-time utility for generating `vocabulary.json` from the CSV |
 | `backend/toxicity.h5` | Pre-trained TensorFlow/Keras toxicity model |
 
 ## Requirements
@@ -51,20 +49,13 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
-Generate the runtime vocabulary once before starting the backend. This is the only setup step that requires `comments.csv`:
-
-```bash
-cd backend
-python build_vocabulary.py
-```
-
-After `vocabulary.json` has been generated, the backend no longer reads `comments.csv` during startup. You can archive or remove the CSV if you do not need to rebuild the vocabulary or retrain the model. Keep `vocabulary.json` paired with the model that was trained using it.
+The repository includes the persisted `vocabulary.json` required for inference. Keep it paired with the model that was trained using it.
 
 ## Run the backend
 
 ### Docker (recommended)
 
-Docker builds the vocabulary during the image build, so the running container does not need `comments.csv`:
+Docker packages the existing model and vocabulary directly:
 
 ```bash
 docker compose up --build -d
@@ -82,7 +73,7 @@ Stop the container with:
 docker compose down
 ```
 
-The Chrome extension still runs on the host and continues to use `http://127.0.0.1:5050`. The initial Docker build downloads TensorFlow and processes the CSV, so it may take several minutes and requires the CSV to remain in the build context. The final runtime image contains the model and persisted vocabulary, but not the CSV.
+The Chrome extension still runs on the host and continues to use `http://127.0.0.1:5050`. The initial Docker build downloads TensorFlow and may take several minutes. The runtime image contains the model and persisted vocabulary.
 
 ### Local Python
 
@@ -93,7 +84,24 @@ cd backend
 python app.py
 ```
 
-The server listens on `http://localhost:5050` (and all interfaces) by default. On startup it loads the persisted vocabulary and model, avoiding the previous CSV adaptation step.
+The server listens on `http://localhost:5050` (and all interfaces) by default. Docker runs it with Gunicorn; local `python app.py` remains convenient for development. On startup it loads the persisted vocabulary and model, avoiding the previous CSV adaptation step.
+
+### Configuration
+
+The backend supports these environment variables:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `HOST` / `PORT` | `0.0.0.0` / `5050` | Local development server binding |
+| `MODEL_PATH` | `backend/toxicity.h5` | Model file location |
+| `VOCABULARY_PATH` | `backend/vocabulary.json` | Persisted vocabulary location |
+| `TOXICITY_THRESHOLD` | `0.5` | Positive classification threshold |
+| `MAX_TEXT_LENGTH` | `10000` | Maximum characters per input |
+| `MAX_BATCH_SIZE` | `100` | Maximum texts per batch |
+| `CORS_ORIGINS` | disabled | Comma-separated allowed origins |
+| `LOG_LEVEL` | `INFO` | Backend log level |
+
+The API emits JSON-formatted request logs and returns request duration in the `X-Request-Duration-Ms` response header.
 
 ### API endpoints
 
@@ -149,6 +157,42 @@ You can also send custom JSON with `POST /test` using the same `{"text":"..."}` 
 
 The model is considered positive when its output is greater than `0.5`.
 
+The OpenAPI definition is available at [`/openapi.yaml`](http://127.0.0.1:5050/openapi.yaml).
+
+## Testing
+
+Run unit/API tests locally with the development dependencies:
+
+```bash
+pip install -r requirements-dev.txt
+pytest tests/test_app.py -q
+```
+
+Run the integration test against the Docker Compose service:
+
+```bash
+docker compose up --build -d
+pytest tests/integration_test.py -q
+docker compose down
+```
+
+GitHub Actions runs linting, unit tests, a Docker build, and the Compose integration test on pushes and pull requests.
+
+## Model evaluation
+
+The model requires a separate labeled evaluation CSV with a text column and binary label column:
+
+```bash
+cd backend
+python evaluate_model.py \
+  --data /path/to/labeled_comments.csv \
+  --text-column comment_text \
+  --label-column toxic \
+  --output-dir ../evaluation
+```
+
+The command writes `evaluation/metrics.json` containing precision, recall, F1, the confusion matrix, and a classification report. It also writes `evaluation/false_positives.csv` containing non-toxic examples incorrectly classified as toxic.
+
 ## Load the extension in Chrome
 
 1. Start the backend and leave it running.
@@ -166,7 +210,7 @@ After changing extension files, return to `chrome://extensions` and click **Relo
 - Large or highly dynamic pages may still be slow because their text must be classified locally. Requests are batched, and a mutation observer handles text added later by single-page applications.
 - Blurring replaces the original text node with a span and may affect page styling or behavior.
 - The extension currently treats any model score above `0.5` as toxic; there is no user-facing threshold or enable/disable setting.
-- The bundled CSV and model are large assets. The CSV is needed only when rebuilding the persisted vocabulary or retraining.
+- The bundled model and vocabulary are large assets and must remain paired.
 
 ## Privacy
 

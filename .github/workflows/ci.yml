@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install development dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Lint
+        run: ruff check backend tests --select E,F,I --ignore E501
+
+      - name: Unit tests
+        run: pytest tests/test_app.py -q
+
+      - name: Build and start Compose service
+        run: docker compose up --build -d
+
+      - name: Wait for API
+        run: |
+          for attempt in {1..30}; do
+            curl --fail --silent http://127.0.0.1:5050/health && exit 0
+            sleep 5
+          done
+          docker compose logs
+          exit 1
+
+      - name: Integration tests
+        run: pytest tests/integration_test.py -q
+
+      - name: Stop Compose service
+        if: always()
+        run: docker compose down
